@@ -1,6 +1,6 @@
 # KryoNet LibGDX Multiplayer POC
 
-A practical multiplayer game networking example built for TDT4240 Software Architecture. This project demonstrates how to implement real-time client-server communication using KryoNet with LibGDX.
+A practical multiplayer game networking example built for TDT4240 Software Architecture. <br/> This project demonstrates how to implement real-time client-server communication using KryoNet with LibGDX.
 
 ## What This Project Does
 
@@ -202,7 +202,11 @@ client.sendUDP(new PlayerPosition(playerId, x, y));
 
 This POC uses several software design patterns. Here's what they are and how we use them.
 
+For a comprehensive catalog of design patterns, see [refactoring.guru/design-patterns](https://refactoring.guru/design-patterns).
+
 ### 1. Observer Pattern
+
+[Learn more at refactoring.guru](https://refactoring.guru/design-patterns/observer)
 
 **What it is:** A pattern where an object (the "subject") maintains a list of dependents (the "observers") and notifies them automatically when its state changes. The subject doesn't need to know what the observers do with the information.
 
@@ -240,6 +244,8 @@ The `NetworkClient` just calls `listener.onReceived(packet)` for each listener. 
 
 ### 2. Facade Pattern
 
+[Learn more at refactoring.guru](https://refactoring.guru/design-patterns/facade)
+
 **What it is:** A pattern that provides a simplified interface to a complex subsystem. The facade hides the complexity behind a clean API.
 
 **Why it's useful:** Users of the facade don't need to understand the internals. If the internals change, only the facade needs updating.
@@ -267,6 +273,8 @@ client.addListener(myListener);
 The facade handles buffer sizes, packet registration, threading, and error handling internally.
 
 ### 3. Registry Pattern
+
+*Note: Registry is not a Gang of Four pattern, but a common enterprise pattern. See [Martin Fowler's description](https://martinfowler.com/eaaCatalog/registry.html).*
 
 **What it is:** A pattern where a single class is responsible for registering and managing a collection of related items. It provides one place to configure something that would otherwise be scattered.
 
@@ -299,6 +307,8 @@ PacketRegistry.register(server.getKryo());
 Without the registry, you'd have duplicate registration code in both `NetworkClient` and `NetworkServer`, and they might get out of sync.
 
 ### 4. Command Pattern
+
+[Learn more at refactoring.guru](https://refactoring.guru/design-patterns/command)
 
 **What it is:** A pattern where requests are encapsulated as objects, allowing you to parameterize, queue, and log them. Each request becomes a self-contained "command" object.
 
@@ -335,9 +345,11 @@ This makes it easy to add new packet types: create the class, register it, add a
 
 ---
 
-## Framework Comparison for TDT4240
+## Framework Comparison for Game Server Setup
 
 ### KryoNet
+
+[GitHub Repository](https://github.com/EsotericSoftware/kryonet)
 
 | Pros | Cons |
 |------|------|
@@ -351,6 +363,8 @@ This makes it easy to add new packet types: create the class, register it, add a
 
 ### Netty
 
+[Official Website](https://netty.io/) · [GitHub Repository](https://github.com/netty/netty)
+
 | Pros | Cons |
 |------|------|
 | Industry standard (used by Minecraft) | Steep learning curve |
@@ -362,6 +376,8 @@ This makes it easy to add new packet types: create the class, register it, add a
 
 ### Socket.IO (Java Client)
 
+[Official Website](https://socket.io/) · [Java Client GitHub](https://github.com/socketio/socket.io-client-java)
+
 | Pros | Cons |
 |------|------|
 | Works with web browsers | TCP only (higher latency) |
@@ -372,6 +388,8 @@ This makes it easy to add new packet types: create the class, register it, add a
 **Best for:** Turn-based games, chat-heavy games, games with web clients
 
 ### WebSockets
+
+[MDN WebSocket Guide](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API) · [Java-WebSocket Library](https://github.com/TooTallNate/Java-WebSocket)
 
 | Pros | Cons |
 |------|------|
@@ -452,12 +470,6 @@ if (packet instanceof PlayerDamage) {
     players.get(dmg.targetId).takeDamage(dmg.damage);
 }
 ```
-
-### Deploying for LAN Play
-
-1. Find your computer's IP: run `ipconfig` in terminal
-2. Look for "IPv4 Address" (something like `192.168.1.100`)
-3. Other players connect using that IP instead of `localhost`
 
 ---
 
