@@ -1,0 +1,34 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        google()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.0'
+    }
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+        maven { url 'https://jitpack.io' }
+    }
+    
+    group = 'com.example.network'
+    version = '1.0.0'
+}
+
+ext {
+    kryonetVersion = '2.22.0-RC1'
+    libgdxVersion = '1.12.1'
+    junitVersion = '5.10.0'
+}
+
+subprojects {
+    afterEvaluate {
+        tasks.withType(JavaCompile) {
+            options.encoding = 'UTF-8'
+        }
+    }
+}

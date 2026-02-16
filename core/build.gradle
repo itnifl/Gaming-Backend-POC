@@ -1,0 +1,20 @@
+plugins {
+    id 'java-library'
+    id 'eclipse'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+dependencies {
+    api "com.esotericsoftware:kryonet:${rootProject.ext.kryonetVersion}"
+    api "com.badlogicgames.gdx:gdx:${rootProject.ext.libgdxVersion}"
+    
+    testImplementation "org.junit.jupiter:junit-jupiter:${rootProject.ext.junitVersion}"
+}
+
+test {
+    useJUnitPlatform()
+}

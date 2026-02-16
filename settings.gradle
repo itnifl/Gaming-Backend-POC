@@ -1,0 +1,6 @@
+rootProject.name = 'kryonet-libgdx-poc'
+
+include 'core'
+include 'server'
+include 'desktop'
+include 'android'

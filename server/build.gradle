@@ -1,0 +1,19 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'eclipse'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+application {
+    mainClass = 'com.example.server.ServerLauncher'
+}
+
+dependencies {
+    implementation project(':core')
+    implementation 'org.slf4j:slf4j-simple:2.0.9'
+}

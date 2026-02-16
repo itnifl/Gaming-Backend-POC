@@ -1,0 +1,20 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'eclipse'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+application {
+    mainClass = 'com.example.desktop.DesktopLauncher'
+}
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:${rootProject.ext.libgdxVersion}"
+    implementation "com.badlogicgames.gdx:gdx-platform:${rootProject.ext.libgdxVersion}:natives-desktop"
+}
