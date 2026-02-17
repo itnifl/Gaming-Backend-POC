@@ -105,15 +105,11 @@ Gaming-Backend-POC/
 We chose KryoNet for this project because:
 
 1. **Built for games** - Created by the same developer as LibGDX, designed specifically for game networking needs
-
 2. **TCP + UDP support** - Real-time games need both protocols:
    - **TCP** for messages that must arrive (login, chat, game events)
    - **UDP** for frequent updates where speed matters more than reliability (positions)
-
 3. **Simple API** - Get multiplayer working quickly without deep networking knowledge
-
 4. **Kryo serialization** - Your Java objects are automatically converted to compact bytes - much faster and smaller than JSON
-
 5. **Works with LibGDX and Android** - No extra integration work needed
 
 ### About KryoNet's Java Version
@@ -121,16 +117,78 @@ We chose KryoNet for this project because:
 KryoNet was written for **Java 7** and the library hasn't been updated since 2018. However, this is perfectly acceptable for several reasons:
 
 1. **Java is backwards compatible** - Code written for Java 7 runs fine on Java 11, 17, 21, or any newer version. Your project uses Java 11+, and KryoNet works without issues.
-
 2. **Networking APIs haven't changed** - The Java NIO classes that KryoNet uses (channels, selectors, buffers) are stable and haven't been deprecated.
-
 3. **It's feature-complete** - KryoNet does what it needs to do. Networking libraries don't need constant updates unless there are security issues.
-
 4. **Battle-tested** - Many LibGDX games in production use KryoNet. Stability is more important than recency.
 
 **Can it be updated?** The library is open source, so anyone could fork it and update the code style to use newer Java features (records, var, etc.). But functionally, there's nothing to fix - it works correctly as-is.
 
 If you need a more actively maintained option for production, consider **Netty** (see comparison below).
+
+### KryoNet Basics
+
+KryoNet has four core concepts:
+
+- **`Server`** — Listens on TCP/UDP ports, accepts connections, broadcasts messages
+- **`Client`** — Connects to a server, sends and receives messages
+- **`Kryo`** — Serializer that converts Java objects to bytes (and back)
+- **`Listener`** — Callback interface for connect/disconnect/receive events
+
+Minimal example:
+```java
+// Server
+Server server = new Server();
+server.getKryo().register(MyPacket.class);
+server.start();
+server.bind(27960, 27961);  // TCP, UDP
+
+// Client
+Client client = new Client();
+client.getKryo().register(MyPacket.class);
+client.start();
+client.connect(5000, "localhost", 27960, 27961);
+client.sendTCP(new MyPacket());
+```
+
+### Connection Objects and Broadcasting
+
+Every connected client is represented by a `Connection` object on the server. Key concepts:
+
+**Connection IDs:**
+- Each connection gets a unique integer ID (`connection.getID()`)
+- IDs start at 1 and increment for each new connection
+- IDs are reused after disconnection
+- Use IDs to identify players in packets (e.g., `playerId` field)
+
+**Sending messages from the server:**
+```java
+// To one client
+connection.sendTCP(packet);
+connection.sendUDP(packet);
+
+// To all clients
+server.sendToAllTCP(packet);
+server.sendToAllUDP(packet);
+
+// To all except one (e.g., don't echo position back to sender)
+server.sendToAllExceptTCP(connection.getID(), packet);
+server.sendToAllExceptUDP(connection.getID(), packet);
+```
+
+**Disconnect detection:**
+- KryoNet uses TCP keepalive to detect dead connections
+- When a client disconnects (or times out), `listener.disconnected(connection)` is called
+- Always clean up player data in the disconnect handler
+
+**Buffer sizes** (set in constructor):
+```java
+// Server(writeBufferSize, objectBufferSize)
+Server server = new Server(16384, 4096);
+```
+- `writeBufferSize`: Max bytes queued for sending (larger = more pending messages)
+- `objectBufferSize`: Max size of a single serialized object (larger = bigger packets allowed)
+
+If you see "Buffer overflow" errors, increase these values.
 
 ### How Network Communication Works
 
@@ -163,7 +221,17 @@ public class PlayerPosition {
 }
 ```
 
-**Why the empty constructor?** When Kryo receives bytes over the network, it needs to create an instance of the class first, then fill in the field values. Without a no-arg constructor, it can't create the instance.
+**Why the empty constructor?** Kryo uses **reflection** to deserialize packets. When bytes arrive over the network, Kryo:
+1. Reads the class ID from the byte stream
+2. Calls `Class.newInstance()` to create an empty object (requires no-arg constructor)
+3. Uses reflection to set each field value from the remaining bytes
+
+Without a no-arg constructor, step 2 fails with an `InstantiationException`.
+
+**No interfaces or abstract classes needed.** Kryo serializes POJOs (Plain Old Java Objects) directly. Unlike Java's built-in serialization, packets don't need to implement `Serializable`. Kryo inspects the class at registration time and generates optimized serialization code. This is why:
+- Fields must be `public` (or have getters/setters)
+- You can use any field types Kryo knows about
+- Nested objects work automatically if registered
 
 **Registration is critical.** Every packet class must be registered in the same order on both client and server:
 
@@ -201,7 +269,6 @@ client.sendUDP(new PlayerPosition(playerId, x, y));
 ## Programming Patterns Explained
 
 This POC uses several software design patterns. Here's what they are and how we use them.
-
 For a comprehensive catalog of design patterns, see [refactoring.guru/design-patterns](https://refactoring.guru/design-patterns).
 
 ### 1. Observer Pattern
@@ -209,9 +276,7 @@ For a comprehensive catalog of design patterns, see [refactoring.guru/design-pat
 [Learn more at refactoring.guru](https://refactoring.guru/design-patterns/observer)
 
 **What it is:** A pattern where an object (the "subject") maintains a list of dependents (the "observers") and notifies them automatically when its state changes. The subject doesn't need to know what the observers do with the information.
-
 **Why it's useful:** It decouples the thing that produces events from the things that consume them. You can add new observers without changing the subject.
-
 **How we use it:** The `NetworkClient` is the subject. It notifies all registered `NetworkListener` observers when network events occur (connected, disconnected, packet received).
 
 ```java
@@ -246,40 +311,40 @@ The `NetworkClient` just calls `listener.onReceived(packet)` for each listener. 
 
 [Learn more at refactoring.guru](https://refactoring.guru/design-patterns/facade)
 
-**What it is:** A pattern that provides a simplified interface to a complex subsystem. The facade hides the complexity behind a clean API.
+**What it is:** A pattern that provides a simplified interface to a complex subsystem. The facade hides internal complexity (multiple classes, configuration steps, error handling) behind a single easy-to-use class.
+**Why it's useful:** Users of the facade don't need to understand the internals. If the implementation changes, only the facade needs updating—calling code stays the same.
+**How we use it:** `NetworkClient` and `NetworkServer` are facades over KryoNet's raw API.
 
-**Why it's useful:** Users of the facade don't need to understand the internals. If the internals change, only the facade needs updating.
+Without the facade, you would need to:
+- Create a KryoNet `Client` with specific buffer sizes
+- Get the `Kryo` instance and register every packet class manually
+- Call `start()` to spawn the network thread
+- Call `connect()` with timeout, host, TCP port, and UDP port
+- Create a `Listener` subclass and override multiple methods
+- Handle `IOException` for connection failures
+- Track connection state yourself
 
-**How we use it:** The `NetworkClient` and `NetworkServer` classes are facades over KryoNet. Your game code doesn't touch KryoNet directly.
-
+With our facade:
 ```java
-// Without the facade, you'd have to do this:
-Client kryoClient = new Client(16384, 4096);
-kryoClient.getKryo().register(LoginRequest.class);
-kryoClient.getKryo().register(LoginResponse.class);
-// ... register 10 more classes
-kryoClient.start();
-kryoClient.connect(5000, "localhost", 27960, 27961);
-kryoClient.addListener(new Listener() {
-    public void received(Connection c, Object o) { ... }
-});
-
-// With our facade:
 NetworkClient client = new NetworkClient();  // All setup done internally
 client.connect("localhost");
 client.addListener(myListener);
 ```
 
-The facade handles buffer sizes, packet registration, threading, and error handling internally.
+**This is not just an interface.** An interface defines method signatures. A facade is a *concrete class* that:
+- Wraps multiple objects (KryoNet's `Client`, `Kryo`, internal state)
+- Orchestrates their interactions (registration before connect, start before bind)
+- Provides sensible defaults (buffer sizes, timeouts)
+- Translates between APIs (KryoNet's `Listener` → our `NetworkListener`)
+
+See [NetworkClient.java](core/src/main/java/com/example/network/NetworkClient.java) for the implementation.
 
 ### 3. Registry Pattern
 
 *Note: Registry is not a Gang of Four pattern, but a common enterprise pattern. See [Martin Fowler's description](https://martinfowler.com/eaaCatalog/registry.html).*
 
 **What it is:** A pattern where a single class is responsible for registering and managing a collection of related items. It provides one place to configure something that would otherwise be scattered.
-
 **Why it's useful:** Centralizes configuration. If you need to add a new packet type, there's one place to do it.
-
 **How we use it:** The `PacketRegistry` class registers all packet types with Kryo in one place.
 
 ```java
@@ -306,14 +371,26 @@ PacketRegistry.register(server.getKryo());
 
 Without the registry, you'd have duplicate registration code in both `NetworkClient` and `NetworkServer`, and they might get out of sync.
 
+#### Is the Registry just a Dictionary?
+
+No. A dictionary (map) stores key-value pairs for lookup. Our `PacketRegistry` doesn't store anything—it *configures* an external system (Kryo) by calling `kryo.register()` in a specific order.
+
+The registry pattern provides:
+- **Single point of configuration** — One place to add/remove packet types
+- **Guaranteed consistency** — Both client and server call the same `register()` method
+- **Order enforcement** — Registration order determines class IDs; the registry ensures identical ordering
+- **Encapsulation** — Calling code doesn't know *how* registration works, just that it happens
+
+If this were a dictionary, you'd store packets and retrieve them by key. Instead, we're delegating to Kryo's internal registration system and ensuring both endpoints configure it identically.
+
+See [PacketRegistry.java](core/src/main/java/com/example/network/packets/PacketRegistry.java) for the implementation.
+
 ### 4. Command Pattern
 
 [Learn more at refactoring.guru](https://refactoring.guru/design-patterns/command)
 
 **What it is:** A pattern where requests are encapsulated as objects, allowing you to parameterize, queue, and log them. Each request becomes a self-contained "command" object.
-
 **Why it's useful:** You can treat different types of requests uniformly, queue them, undo them, or log them.
-
 **How we use it:** Each packet class is essentially a command. The server receives packets and dispatches them to handler methods based on type.
 
 ```java
@@ -342,6 +419,108 @@ public void onReceived(PlayerConnection connection, Object packet) {
 ```
 
 This makes it easy to add new packet types: create the class, register it, add a handler.
+
+#### Why Command Pattern is Necessary in KryoNet
+
+KryoNet delivers all incoming data through a single callback: `listener.received(connection, Object)`. The `Object` parameter can be *any* registered class. Without the Command pattern, you'd need to:
+
+1. **Manually parse bytes** — Determine what type of message arrived and decode it
+2. **Use a giant switch statement** — Check raw type codes and cast accordingly
+3. **Tightly couple sender and receiver** — Both sides would need to agree on byte layouts
+
+The Command pattern solves this by making each packet a self-describing object:
+- **Type information is automatic** — `instanceof` checks replace manual type codes
+- **Data is already deserialized** — Kryo populates fields before your callback runs
+- **Adding new commands is trivial** — Create class → register → add handler
+
+This is why KryoNet + Command pattern work so well together: Kryo handles serialization, and the Command pattern provides a clean dispatch mechanism. The server doesn't care *how* packets arrive—it just receives command objects and routes them to handlers.
+
+### 5. Producer-Consumer Pattern
+
+*Note: Producer-Consumer is a concurrency pattern, not a Gang of Four pattern. See [Wikipedia](https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem) for background.*
+
+**What it is:** A pattern where one or more threads (producers) generate data and place it in a shared buffer, while other threads (consumers) retrieve and process that data. The two sides operate independently.
+**Why it's useful:** Decouples data generation from data processing. Producers don't block waiting for consumers, and consumers don't block waiting for producers (beyond buffer access).
+**How we use it:** KryoNet's network thread is the producer—it receives packets and writes to shared collections. LibGDX's render thread is the consumer—it reads from those collections to draw frames.
+
+| Thread | Role | Example |
+|--------|------|---------||
+| Network (KryoNet) | Producer | `remotePlayers.put(id, player)` when `PlayerPosition` arrives |
+| Render (LibGDX) | Consumer | `for (RemotePlayer p : remotePlayers.values()) draw(p)` |
+
+The "buffer" between them is a thread-safe collection (`ConcurrentHashMap`). This allows:
+- Network thread to update player positions at any time
+- Render thread to read positions at 60 FPS without blocking
+- No explicit locking in application code
+
+See the [Thread Synchronization](#thread-synchronization) section for implementation details.
+
+---
+
+## Chat System
+
+**Packet:** `ChatMessage` in [core/network/packets/ChatMessage.java](core/src/main/java/com/example/network/packets/ChatMessage.java)
+**Protocol:** TCP (reliable delivery required for chat)
+**Flow:** Client → Server → All Clients (broadcast)
+**Sending:** `client.sendTCP(chatMessage)` from desktop/android client
+**Receiving:** `GameServer.handleChat(connection, message)` validates sender, sets timestamp, broadcasts via `networkServer.sendToAllTCP(message)`
+
+---
+
+## Movement System
+
+**Packet:** `PlayerPosition` in [core/network/packets/PlayerPosition.java](core/src/main/java/com/example/network/packets/PlayerPosition.java)
+**Protocol:** UDP (speed over reliability for real-time updates)
+**Flow:** Client → Server → All Other Clients (excludes sender)
+**Sending:** `networkClient.sendUDP(pos)` at fixed rate (`NetworkConfig.POSITION_UPDATE_RATE`)
+**Receiving:** `GameServer.handlePosition(connection, position)` stores position server-side, broadcasts via `networkServer.sendToAllExceptUDP(senderId, position)`
+
+---
+
+## Thread Synchronization
+
+**Problem:** KryoNet receives packets on its network thread, but LibGDX renders on the main/GL thread.
+**Solution:** Thread-safe collections bridge the two threads without explicit locking.
+**Server storage:** `ConcurrentHashMap<Integer, PlayerConnection>` in [core/network/NetworkServer.java](core/src/main/java/com/example/network/NetworkServer.java)
+**Client storage:** `ConcurrentHashMap<Integer, RemotePlayer>` in [desktop/GameClientScreen.java](desktop/src/main/java/com/example/desktop/GameClientScreen.java)
+**Write (network thread):** `remotePlayers.put(playerId, new RemotePlayer(...))` when packets arrive
+**Read (render thread):** Iterate `remotePlayers` during `render()` to draw all players
+**Why it works:** `ConcurrentHashMap` allows simultaneous reads/writes without blocking. Chat uses `CopyOnWriteArrayList` for the same reason.
+
+### KryoNet's Threading Model
+
+KryoNet spawns a dedicated **update thread** when you call `client.start()` or `server.start()`. This thread:
+- Polls the network socket using Java NIO selectors
+- Deserializes incoming bytes into packet objects via Kryo
+- Invokes your `Listener.received()` callback **on the network thread**
+
+This means your listener code runs concurrently with your game's render loop. If both threads access shared state (like player positions), you need synchronization.
+
+### Thread-Safe Collections (Producer-Consumer Implementation)
+
+This section implements the [Producer-Consumer Pattern](#5-producer-consumer-pattern) described above. Without thread-safe collections, the render thread might read a partially-written object or miss updates entirely.
+
+### Thread-Safe Collections Used
+
+| Collection | Location | Why |
+|------------|----------|-----|
+| `ConcurrentHashMap<Integer, PlayerConnection>` | NetworkServer | Multiple clients connect/disconnect while server iterates |
+| `ConcurrentHashMap<Integer, RemotePlayer>` | GameClientScreen | Position updates arrive while rendering |
+| `CopyOnWriteArrayList<NetworkListener>` | NetworkClient | Listeners may be added/removed during callbacks |
+| `CopyOnWriteArrayList<String>` | GameClientScreen (chat) | Messages arrive while rendering chat log |
+
+**Why not `synchronized`?** Explicit locks block threads. `ConcurrentHashMap` uses lock striping internally—different keys can be written simultaneously, and reads never block. For a game running at 60 FPS, this matters.
+
+### The Listener Callback Model
+
+KryoNet uses the Observer pattern for thread communication. When a packet arrives:
+
+1. KryoNet's update thread deserializes the packet
+2. It calls `listener.received(connection, object)` on all registered listeners
+3. Your listener writes to a thread-safe collection
+4. Your render loop reads from that collection on the next frame
+
+This decouples network I/O from rendering—packets are processed as fast as they arrive, while rendering proceeds at its own pace.
 
 ---
 
@@ -402,7 +581,6 @@ This makes it easy to add new packet types: create the class, register it, add a
 ### Recommendation for TDT4240
 
 **Use KryoNet** if you're building a real-time LibGDX game and want to focus on gameplay rather than networking infrastructure. It's the fastest path to a working multiplayer prototype.
-
 **Consider Netty** if you want to learn industry tools or need production-grade performance, but budget extra time for the learning curve.
 
 ---
