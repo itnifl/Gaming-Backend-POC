@@ -271,6 +271,20 @@ client.sendUDP(new PlayerPosition(playerId, x, y));
 This POC uses several software design patterns. Here's what they are and how we use them.
 For a comprehensive catalog of design patterns, see [refactoring.guru/design-patterns](https://refactoring.guru/design-patterns).
 
+### Which Patterns are Required?
+
+Not all patterns here are optional—some are forced by how KryoNet works:
+
+| Pattern | Status | Why |
+|---------|--------|-----|
+| **Observer** | Required | KryoNet's `Listener` interface IS an observer. You must implement callbacks to receive packets—there's no polling alternative. |
+| **Command** | Required | KryoNet delivers all packets through one callback as `Object`. You must dispatch by type (`instanceof`). |
+| **Producer-Consumer** | Required for games | KryoNet's network thread runs separately from your game loop. Without thread-safe collections, you'll get race conditions. |
+| **Facade** | Recommended | Makes API cleaner, but you *could* use KryoNet directly. |
+| **Registry** | Recommended | Prevents registration order bugs, but you *could* register packets inline everywhere. |
+
+**Bottom line:** Observer and Command are unavoidable—they're how KryoNet is designed. Producer-Consumer is effectively required for any real-time game. Facade and Registry prevent bugs but are architectural choices.
+
 ### 1. Observer Pattern
 
 [Learn more at refactoring.guru](https://refactoring.guru/design-patterns/observer)
