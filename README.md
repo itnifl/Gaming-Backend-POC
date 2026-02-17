@@ -266,6 +266,100 @@ client.sendUDP(new PlayerPosition(playerId, x, y));
 
 ---
 
+## Architecture: Layered Design
+
+This project uses a **3-tier layered architecture**, where each layer has a single responsibility and only communicates with adjacent layers.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Presentation Layer (desktop/, android/)                │
+│  - Rendering, input handling, UI                        │
+│  - Platform-specific code (LibGDX, Android SDK)         │
+└─────────────────────────┬───────────────────────────────┘
+                          │ uses
+┌─────────────────────────▼───────────────────────────────┐
+│  Application Layer (server/GameServer)                  │
+│  - Game logic, validation, state management             │
+│  - Coordinates player interactions                      │
+└─────────────────────────┬───────────────────────────────┘
+                          │ uses
+┌─────────────────────────▼───────────────────────────────┐
+│  Network Layer (core/)                                  │
+│  - Transport (KryoNet), serialization (Kryo)            │
+│  - Packet definitions, connection management            │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Layer Responsibilities
+
+| Layer | Module(s) | Contains |
+|-------|-----------|----------|
+| **Presentation** | `desktop/`, `android/` | `GameClientScreen`, `AndroidGameClient`, rendering, input |
+| **Application** | `server/` | `GameServer`, game rules, validation, broadcasting |
+| **Network** | `core/` | `NetworkClient`, `NetworkServer`, packets, config |
+
+### Why Layers Matter
+
+- **Separation of concerns** — Each layer does one thing well
+- **Testability** — You can test game logic without rendering
+- **Portability** — Swap `desktop/` for `android/` without changing `core/`
+- **Team scaling** — Different developers can work on different layers
+
+### What About MVC?
+
+MVC (Model-View-Controller) is a finer-grained pattern *within* the Presentation layer. Currently, `GameClientScreen` combines all three roles:
+
+```
+GameClientScreen (current "god class")
+├── Model:      localX, localY, remotePlayers, chatMessages
+├── View:       SpriteBatch, ShapeRenderer, render()
+└── Controller: handleInput(), handlePacket(), network callbacks
+```
+
+**Should you refactor to MVC?** Consider these trade-offs:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Keep as-is** | Simple, easy to follow, good for learning | Harder to test, grows unwieldy |
+| **Extract Model** | Testable game state, cleaner separation | More files, indirection |
+| **Full MVC** | Maximum separation, industry standard | Overkill for small projects |
+
+**Suggestion:** If your client grows beyond ~500 lines, extract a `GameState` class:
+
+```java
+// GameState.java - the Model
+public class GameState {
+    private float localX, localY;
+    private int localPlayerId = -1;
+    private final Map<Integer, RemotePlayer> remotePlayers = new ConcurrentHashMap<>();
+    private final List<String> chatMessages = new CopyOnWriteArrayList<>();
+    
+    // Getters, setters, business logic (collision detection, etc.)
+}
+
+// GameClientScreen.java - becomes View + Controller
+public class GameClientScreen extends ApplicationAdapter {
+    private GameState state;  // Model
+    private GameRenderer renderer;  // Could extract View too
+    // Input handling and network callbacks update `state`
+}
+```
+
+This gives you testable state without full MVC complexity.
+
+### Other Architectural Patterns to Consider
+
+| Pattern | When to Use | Complexity |
+|---------|-------------|------------|
+| **State Pattern** | Multiple game states (menu, playing, paused, game over) | Low |
+| **Entity-Component-System** | Many entity types with shared behaviors | High |
+| **Event Bus** | Decouple subsystems (audio, UI, gameplay) | Medium |
+| **Repository Pattern** | Persistent data (save games, leaderboards) | Medium |
+
+**Recommendation for a project:** The current architecture is appropriate for a networking demonstration. If you extend it into a full game, consider adding the **State Pattern** for game states first—it's high value for low effort.
+
+---
+
 ## Programming Patterns Explained
 
 This POC uses several software design patterns. Here's what they are and how we use them.
