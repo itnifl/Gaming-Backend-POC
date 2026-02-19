@@ -14,13 +14,44 @@ It's intentionally minimal to serve as a starting point for your own multiplayer
 
 ---
 
+## Prerequisites
+
+Before running this project, ensure you have:
+
+### Java Development Kit (JDK)
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| **JDK** | 11 or newer | JDK 17 or 21 recommended for long-term support |
+
+Verify your installation:
+```powershell
+java -version
+```
+
+If not installed, download from [Adoptium](https://adoptium.net/) (free, community-supported OpenJDK builds).
+
+### VS Code Extensions
+
+Install these extensions via the Extensions panel (`Ctrl+Shift+X`):
+
+| Extension | Publisher | Required? | Purpose |
+|-----------|-----------|-----------|---------|
+| **Extension Pack for Java** | Microsoft | **Yes** | Java language support, debugging, project management |
+| **Gradle for Java** | Microsoft | **Yes** | Build support (included in Extension Pack) |
+| **Debugger for Java** | Microsoft | **Yes** | Run/Debug configs (included in Extension Pack) |
+
+> **Tip:** Installing "Extension Pack for Java" automatically installs all necessary extensions including Gradle support.
+
+### Gradle (Build Tool)
+
+**No manual installation required.** This project uses the Gradle Wrapper (`gradlew.bat` / `gradlew`), which automatically downloads Gradle 9.3.1 on first run.
+
+---
+
 ## Quick Start with VS Code
 
-### Prerequisites
-
-Make sure you have installed:
-- **Extension Pack for Java** (Microsoft) - search for it in Extensions (`Ctrl+Shift+X`)
-- Java 11 or newer
+**[Watch the video walkthrough](demo-media/howtostart.mp4)** if you prefer a visual guide.
 
 ### Starting the Server (VS Code Debug)
 
@@ -84,16 +115,32 @@ If the debug buttons don't appear, use the terminal instead:
 
 ```
 Gaming-Backend-POC/
-├── core/                 # Shared code (used by both client and server)
-│   └── com.example.network
-│       ├── NetworkClient.java      # Wraps KryoNet client
-│       ├── NetworkServer.java      # Wraps KryoNet server
-│       ├── NetworkConfig.java      # Port numbers, timeouts
-│       ├── NetworkListener.java    # Interface for network events
-│       └── packets/                # Data classes for network messages
-├── server/               # Standalone server application
-├── desktop/              # LibGDX desktop client
-└── android/              # Android client (tap to move)
+├── core/                           # Shared networking code
+│   └── com.example.network/
+│       ├── NetworkClient.java      # KryoNet client wrapper (Facade)
+│       ├── NetworkServer.java      # KryoNet server wrapper (Facade)
+│       ├── NetworkConfig.java      # Ports, timeouts, buffer sizes
+│       ├── NetworkListener.java    # Simplified listener interface
+│       └── packets/
+│           ├── PacketRegistry.java # Central packet registration
+│           ├── LoginRequest.java   # Client → Server: join game
+│           ├── LoginResponse.java  # Server → Client: login result
+│           ├── PlayerPosition.java # Position updates (UDP)
+│           ├── PlayerJoined.java   # Broadcast: new player
+│           ├── PlayerLeft.java     # Broadcast: player disconnected
+│           ├── PlayerList.java     # Server → Client: all current players
+│           ├── ChatMessage.java    # Chat messages (TCP)
+│           ├── Ping.java           # Latency measurement request
+│           └── Pong.java           # Latency measurement response
+├── server/                         # Standalone server application
+│   └── com.example.server/
+│       ├── ServerLauncher.java     # Entry point
+│       └── GameServer.java         # Game logic, validation, broadcasting
+├── desktop/                        # LibGDX desktop client
+│   └── com.example.desktop/
+│       ├── DesktopLauncher.java    # Entry point
+│       └── GameClientScreen.java   # Rendering, input, network callbacks
+└── android/                        # Android client (tap to move)
 ```
 
 ---
@@ -104,24 +151,38 @@ Gaming-Backend-POC/
 
 We chose KryoNet for this project because:
 
-1. **Built for games** - Created by the same developer as LibGDX, designed specifically for game networking needs
-2. **TCP + UDP support** - Real-time games need both protocols:
+1. **Built for games.** Created by the same developer as LibGDX, designed specifically for game networking needs.
+2. **TCP + UDP support.** Real time games need both protocols:
    - **TCP** for messages that must arrive (login, chat, game events)
    - **UDP** for frequent updates where speed matters more than reliability (positions)
-3. **Simple API** - Get multiplayer working quickly without deep networking knowledge
-4. **Kryo serialization** - Your Java objects are automatically converted to compact bytes - much faster and smaller than JSON
-5. **Works with LibGDX and Android** - No extra integration work needed
+3. **Simple API.** Get multiplayer working quickly without deep networking knowledge.
+4. **Kryo serialization.** Your Java objects are automatically converted to compact bytes, much faster and smaller than JSON.
+5. **Works with LibGDX and Android.** No extra integration work needed.
+
+#### Why LibGDX and Android Integration "Just Works"
+
+KryoNet was created by Nathan Sweet, the same developer behind LibGDX. This shared origin means:
+
+- **Same threading philosophy** — Both libraries expect you to handle threading explicitly. KryoNet's network thread and LibGDX's render thread are designed to coexist (you bridge them with `ConcurrentHashMap`, as shown in this project).
+- **Pure Java, no native dependencies** — KryoNet uses only Java NIO (non-blocking I/O), which is available on all platforms including Android. No JNI, no platform-specific code.
+- **Gradle-friendly** — Add one dependency line to your `build.gradle` and it works across desktop, Android, and iOS (via RoboVM).
+- **Small footprint** — KryoNet + Kryo add ~200KB to your APK. Compare to alternatives that pull in megabytes of transitive dependencies.
+
+For Android specifically, KryoNet respects mobile constraints:
+- Works on any network thread you provide (doesn't force `AsyncTask` or other Android-specific patterns)
+- No special permissions beyond `INTERNET`
+- Handles WiFi ↔ mobile data transitions gracefully (TCP reconnection)
 
 ### About KryoNet's Java Version
 
 KryoNet was written for **Java 7** and the library hasn't been updated since 2018. However, this is perfectly acceptable for several reasons:
 
-1. **Java is backwards compatible** - Code written for Java 7 runs fine on Java 11, 17, 21, or any newer version. Your project uses Java 11+, and KryoNet works without issues.
-2. **Networking APIs haven't changed** - The Java NIO classes that KryoNet uses (channels, selectors, buffers) are stable and haven't been deprecated.
-3. **It's feature-complete** - KryoNet does what it needs to do. Networking libraries don't need constant updates unless there are security issues.
-4. **Battle-tested** - Many LibGDX games in production use KryoNet. Stability is more important than recency.
+1. **Java is backwards compatible.** Code written for Java 7 runs fine on Java 11, 17, 21, or any newer version. Your project uses Java 11+, and KryoNet works without issues.
+2. **Networking APIs haven't changed.** The Java NIO classes that KryoNet uses (channels, selectors, buffers) are stable and haven't been deprecated.
+3. **It's feature complete.** KryoNet does what it needs to do. Networking libraries don't need constant updates unless there are security issues.
+4. **Battle tested.** Many LibGDX games in production use KryoNet. Stability is more important than recency.
 
-**Can it be updated?** The library is open source, so anyone could fork it and update the code style to use newer Java features (records, var, etc.). But functionally, there's nothing to fix - it works correctly as-is.
+**Can it be updated?** The library is open source, so anyone could fork it and update the code style to use newer Java features (records, var, etc.). But functionally, there's nothing to fix. It works correctly as is.
 
 If you need a more actively maintained option for production, consider **Netty** (see comparison below).
 
@@ -322,7 +383,7 @@ GameClientScreen (current "god class")
 |----------|------|------|
 | **Keep as-is** | Simple, easy to follow, good for learning | Harder to test, grows unwieldy |
 | **Extract Model** | Testable game state, cleaner separation | More files, indirection |
-| **Full MVC** | Maximum separation, industry standard | Overkill for small projects |
+| **Full MVC** | Maximum separation, industry standard, highly maintainable long-term, foundation for enterprise patterns | Overkill for small projects |
 
 **Suggestion:** If your client grows beyond ~500 lines, extract a `GameState` class:
 
@@ -360,208 +421,1228 @@ This gives you testable state without full MVC complexity.
 
 ---
 
-## Programming Patterns Explained
+## Programming Patterns Inherent to KryoNet
 
-This POC uses several software design patterns. Here's what they are and how we use them.
-For a comprehensive catalog of design patterns, see [refactoring.guru/design-patterns](https://refactoring.guru/design-patterns).
+This section explains the **design patterns that KryoNet forces you to use**. Unlike optional architectural choices, these patterns are built into how KryoNet works—you cannot avoid them.
 
-### Which Patterns are Required?
+> **For beginners:** A design pattern is a proven solution to a common coding problem. Think of it like a recipe: instead of inventing how to make bread from scratch, you follow a recipe that others have perfected. Patterns give names to these "recipes" so developers can communicate efficiently.
+>
+> For a comprehensive catalog, see [refactoring.guru/design-patterns](https://refactoring.guru/design-patterns).
 
-Not all patterns here are optional—some are forced by how KryoNet works:
+### Why Does KryoNet Force Specific Patterns?
 
-| Pattern | Status | Why |
-|---------|--------|-----|
-| **Observer** | Required | KryoNet's `Listener` interface IS an observer. You must implement callbacks to receive packets—there's no polling alternative. |
-| **Command** | Required | KryoNet delivers all packets through one callback as `Object`. You must dispatch by type (`instanceof`). |
-| **Producer-Consumer** | Required for games | KryoNet's network thread runs separately from your game loop. Without thread-safe collections, you'll get race conditions. |
-| **Facade** | Recommended | Makes API cleaner, but you *could* use KryoNet directly. |
-| **Registry** | Recommended | Prevents registration order bugs, but you *could* register packets inline everywhere. |
+KryoNet is a **framework**, not a library. The difference matters:
+- A **library** is code you call when you want to.
+- A **framework** is code that calls *your* code—it controls the flow.
 
-**Bottom line:** Observer and Command are unavoidable—they're how KryoNet is designed. Producer-Consumer is effectively required for any real-time game. Facade and Registry prevent bugs but are architectural choices.
+KryoNet controls how packets are received (callbacks, not polling), how classes are identified (registration order), and what thread your code runs on. These constraints naturally lead to specific patterns.
 
-### 1. Observer Pattern
+### Pattern Summary Table
 
-[Learn more at refactoring.guru](https://refactoring.guru/design-patterns/observer)
+| Pattern | Category | Required? | Why KryoNet Forces It |
+|---------|----------|-----------|----------------------|
+| **[Observer](#1-observer-pattern-required)** | Behavioral | **Yes** | KryoNet uses callbacks (`Listener.received()`). No polling API exists. |
+| **[Command](#2-command-pattern-required)** | Behavioral | **Yes** | All packets arrive as `Object`. You must dispatch by type. |
+| **[Registry](#3-registry-pattern-required)** | Creational | **Yes** | Kryo assigns class IDs by registration order. Client/server must match. |
+| **[Producer-Consumer](#4-producer-consumer-pattern-required-for-games)** | Concurrency | **Yes*** | Network thread is separate from game loop. Shared state needs synchronization. |
+| **[Connector](#5-connector-pattern-recommended)** | Architectural | Recommended | KryoNet offers TCP+UDP. Abstracting protocol choice improves design. |
+| **[Facade](#6-facade-pattern-recommended)** | Structural | Recommended | KryoNet's raw API is verbose. Wrapping simplifies usage. |
 
-**What it is:** A pattern where an object (the "subject") maintains a list of dependents (the "observers") and notifies them automatically when its state changes. The subject doesn't need to know what the observers do with the information.
-**Why it's useful:** It decouples the thing that produces events from the things that consume them. You can add new observers without changing the subject.
-**How we use it:** The `NetworkClient` is the subject. It notifies all registered `NetworkListener` observers when network events occur (connected, disconnected, packet received).
+\* Producer-Consumer is technically avoidable if you process everything on the network thread, but that blocks network I/O and causes lag—don't do it.
+
+### Visual: How Packets Flow Through the Patterns
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT SIDE                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  [User Input]                                                               │
+│       │                                                                     │
+│       ▼                                                                     │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────────────────┐ │
+│  │   COMMAND   │───▶│  REGISTRY   │───▶│   CONNECTOR (TCP or UDP)        │ │
+│  │ PlayerPos   │    │ ID=5 → bytes│    │   Chooses protocol, sends       │ │
+│  └─────────────┘    └─────────────┘    └───────────────┬─────────────────┘ │
+│                                                         │  [NETWORK]        │
+└─────────────────────────────────────────────────────────┼───────────────────┘
+                                                          │
+                        ════════════════════════════════════════════════
+                                                          │
+┌─────────────────────────────────────────────────────────┼───────────────────┐
+│                           SERVER SIDE                   │                   │
+├─────────────────────────────────────────────────────────┼───────────────────┤
+│                                                         ▼                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │                     CONNECTOR (receives bytes)                        │ │
+│  └───────────────────────────────────────┬───────────────────────────────┘ │
+│                                          │                                  │
+│                                          ▼                                  │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │    REGISTRY: bytes → ID=5 → PlayerPosition.class → new instance      │ │
+│  └───────────────────────────────────────┬───────────────────────────────┘ │
+│                                          │                                  │
+│                                          ▼                                  │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │    OBSERVER: listener.received(connection, playerPosObject)          │ │
+│  │              ──────────────────────────────────────────────          │ │
+│  │              (runs on NETWORK THREAD)                                 │ │
+│  └───────────────────────────────────────┬───────────────────────────────┘ │
+│                                          │                                  │
+│                                          ▼                                  │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │    COMMAND: if (packet instanceof PlayerPosition) handlePosition()   │ │
+│  └───────────────────────────────────────┬───────────────────────────────┘ │
+│                                          │                                  │
+│                                          ▼                                  │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │    PRODUCER-CONSUMER: write to ConcurrentHashMap (shared buffer)     │ │
+│  │                       Game loop reads on render thread               │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 1. Observer Pattern (Required)
+
+#### What is it?
+
+Imagine a newspaper subscription. You (the **observer**) subscribe to a newspaper (the **subject**). When a new edition is published, the newspaper automatically delivers it to all subscribers. The newspaper doesn't know what you do with it—read it, recycle it, or use it to wrap fish. It just delivers.
+
+In code terms:
+- **Subject** — The object that has interesting events (KryoNet's network connection)
+- **Observer** — Objects that want to know when events happen (your game code)
+- **Subscribe** — Register to receive notifications
+- **Notify** — Subject calls a method on all observers when something happens
+
+#### Why KryoNet REQUIRES This Pattern
+
+KryoNet is **event-driven**, not poll-driven. Compare:
 
 ```java
-// NetworkListener is the observer interface
-public interface NetworkListener {
-    void onConnected();
-    void onDisconnected();
-    void onReceived(Object packet);
+// ❌ POLLING (not how KryoNet works)
+// You would have to constantly check for new data
+while (running) {
+    Object packet = client.poll();  // This method doesn't exist!
+    if (packet != null) {
+        handlePacket(packet);
+    }
+    Thread.sleep(10);
 }
 
-// Your game screen becomes an observer
-public class GameScreen implements NetworkListener {
+// ✅ OBSERVER (how KryoNet actually works)
+// KryoNet calls YOUR code when data arrives
+client.addListener(new Listener() {
     @Override
-    public void onReceived(Object packet) {
+    public void received(Connection connection, Object packet) {
+        // KryoNet calls this for you automatically!
+        handlePacket(packet);
+    }
+});
+```
+
+**There is no `client.poll()` method.** KryoNet's `Listener` interface is the *only* way to receive packets. You must implement callbacks—the Observer pattern is literally the API.
+
+#### KryoNet's Built-in Observer: The Listener Interface
+
+KryoNet provides this interface (simplified):
+
+```java
+// KryoNet's Listener interface - this IS the Observer pattern
+public abstract class Listener {
+    // Called when a client connects (server-side) or connection established (client-side)
+    public void connected(Connection connection) {}
+    
+    // Called when connection is lost
+    public void disconnected(Connection connection) {}
+    
+    // Called when a packet arrives - THIS IS WHERE YOUR GAME LOGIC GOES
+    public void received(Connection connection, Object object) {}
+    
+    // Called when connection becomes idle (optional)
+    public void idle(Connection connection) {}
+}
+```
+
+#### Complete Example: Implementing an Observer
+
+```java
+// Step 1: Create your observer by extending Listener (or implementing NetworkListener)
+public class GameClientListener extends Listener {
+    
+    private final GameScreen gameScreen;  // Reference to update the UI
+    
+    public GameClientListener(GameScreen gameScreen) {
+        this.gameScreen = gameScreen;
+    }
+    
+    @Override
+    public void connected(Connection connection) {
+        System.out.println("Connected to server!");
+        // Maybe show "Connected" on screen, enable the "Play" button, etc.
+        gameScreen.setConnectionStatus("Connected");
+    }
+    
+    @Override
+    public void disconnected(Connection connection) {
+        System.out.println("Disconnected from server!");
+        // Show reconnect dialog, disable controls, etc.
+        gameScreen.setConnectionStatus("Disconnected");
+        gameScreen.showReconnectDialog();
+    }
+    
+    @Override
+    public void received(Connection connection, Object packet) {
+        // This is called on KryoNet's NETWORK THREAD, not the game thread!
+        // Be careful with thread safety (see Producer-Consumer pattern)
+        
         if (packet instanceof PlayerPosition) {
-            // Update the game display
+            PlayerPosition pos = (PlayerPosition) packet;
+            gameScreen.updatePlayerPosition(pos.playerId, pos.x, pos.y);
+        } 
+        else if (packet instanceof ChatMessage) {
+            ChatMessage chat = (ChatMessage) packet;
+            gameScreen.addChatMessage(chat.senderName + ": " + chat.message);
+        }
+        else if (packet instanceof GameOver) {
+            GameOver over = (GameOver) packet;
+            gameScreen.showGameOverScreen(over.winnerId);
         }
     }
 }
 
-// Register as an observer - NetworkClient doesn't know or care what GameScreen does
-client.addListener(gameScreen);
-
-// You could add more observers for different purposes
-client.addListener(soundEffects);   // Play sounds on events
-client.addListener(analytics);       // Track metrics
+// Step 2: Register your observer with the subject (KryoNet client)
+public class Main {
+    public static void main(String[] args) {
+        Client kryoClient = new Client();
+        GameScreen gameScreen = new GameScreen();
+        
+        // Subscribe to events
+        kryoClient.addListener(new GameClientListener(gameScreen));
+        
+        // You can add multiple observers!
+        kryoClient.addListener(new SoundEffectListener());  // Plays sounds on events
+        kryoClient.addListener(new AnalyticsListener());    // Tracks metrics
+        kryoClient.addListener(new LoggingListener());      // Logs for debugging
+        
+        // Start the client - it will call your listeners when events occur
+        kryoClient.start();
+        kryoClient.connect(5000, "localhost", 27960, 27961);
+    }
+}
 ```
 
-The `NetworkClient` just calls `listener.onReceived(packet)` for each listener. It doesn't know if listeners update graphics, play sounds, or log data.
+#### Multiple Observers Example
 
-### 2. Facade Pattern
-
-[Learn more at refactoring.guru](https://refactoring.guru/design-patterns/facade)
-
-**What it is:** A pattern that provides a simplified interface to a complex subsystem. The facade hides internal complexity (multiple classes, configuration steps, error handling) behind a single easy-to-use class.
-**Why it's useful:** Users of the facade don't need to understand the internals. If the implementation changes, only the facade needs updating—calling code stays the same.
-**How we use it:** `NetworkClient` and `NetworkServer` are facades over KryoNet's raw API.
-
-Without the facade, you would need to:
-- Create a KryoNet `Client` with specific buffer sizes
-- Get the `Kryo` instance and register every packet class manually
-- Call `start()` to spawn the network thread
-- Call `connect()` with timeout, host, TCP port, and UDP port
-- Create a `Listener` subclass and override multiple methods
-- Handle `IOException` for connection failures
-- Track connection state yourself
-
-With our facade:
-```java
-NetworkClient client = new NetworkClient();  // All setup done internally
-client.connect("localhost");
-client.addListener(myListener);
-```
-
-**This is not just an interface.** An interface defines method signatures. A facade is a *concrete class* that:
-- Wraps multiple objects (KryoNet's `Client`, `Kryo`, internal state)
-- Orchestrates their interactions (registration before connect, start before bind)
-- Provides sensible defaults (buffer sizes, timeouts)
-- Translates between APIs (KryoNet's `Listener` → our `NetworkListener`)
-
-See [NetworkClient.java](core/src/main/java/com/example/network/NetworkClient.java) for the implementation.
-
-### 3. Registry Pattern
-
-*Note: Registry is not a Gang of Four pattern, but a common enterprise pattern. See [Martin Fowler's description](https://martinfowler.com/eaaCatalog/registry.html).*
-
-**What it is:** A pattern where a single class is responsible for registering and managing a collection of related items. It provides one place to configure something that would otherwise be scattered.
-**Why it's useful:** Centralizes configuration. If you need to add a new packet type, there's one place to do it.
-**How we use it:** The `PacketRegistry` class registers all packet types with Kryo in one place.
+One powerful aspect of Observer is that you can have **many observers** for the same events:
 
 ```java
-// PacketRegistry.java - the single source of truth for packet registration
-public class PacketRegistry {
-    public static void register(Kryo kryo) {
-        // All packets registered here, in order
-        kryo.register(LoginRequest.class);
-        kryo.register(LoginResponse.class);
-        kryo.register(PlayerPosition.class);
-        kryo.register(ChatMessage.class);
-        kryo.register(PlayerJoined.class);
-        kryo.register(PlayerLeft.class);
-        // ... add new packets at the end
+// Observer 1: Updates the game display
+public class GameDisplayListener extends Listener {
+    @Override
+    public void received(Connection conn, Object packet) {
+        if (packet instanceof PlayerPosition) {
+            // Update sprite positions on screen
+        }
     }
 }
 
-// Used in NetworkClient constructor
-PacketRegistry.register(client.getKryo());
+// Observer 2: Plays sound effects (different class, different responsibility)
+public class SoundEffectListener extends Listener {
+    @Override
+    public void received(Connection conn, Object packet) {
+        if (packet instanceof PlayerPosition) {
+            // Play footstep sounds
+        }
+        if (packet instanceof ChatMessage) {
+            // Play notification ding
+        }
+    }
+}
 
-// Used in NetworkServer constructor  
-PacketRegistry.register(server.getKryo());
+// Observer 3: Logs events for debugging
+public class DebugLogListener extends Listener {
+    @Override
+    public void received(Connection conn, Object packet) {
+        System.out.println("[DEBUG] Received: " + packet.getClass().getSimpleName());
+    }
+}
+
+// All three get notified of the SAME events
+client.addListener(new GameDisplayListener());
+client.addListener(new SoundEffectListener());
+client.addListener(new DebugLogListener());
 ```
 
-Without the registry, you'd have duplicate registration code in both `NetworkClient` and `NetworkServer`, and they might get out of sync.
+This follows the **Single Responsibility Principle**: each observer does one thing well.
 
-#### Is the Registry just a Dictionary?
-
-No. A dictionary (map) stores key-value pairs for lookup. Our `PacketRegistry` doesn't store anything—it *configures* an external system (Kryo) by calling `kryo.register()` in a specific order.
-
-The registry pattern provides:
-- **Single point of configuration** — One place to add/remove packet types
-- **Guaranteed consistency** — Both client and server call the same `register()` method
-- **Order enforcement** — Registration order determines class IDs; the registry ensures identical ordering
-- **Encapsulation** — Calling code doesn't know *how* registration works, just that it happens
-
-If this were a dictionary, you'd store packets and retrieve them by key. Instead, we're delegating to Kryo's internal registration system and ensuring both endpoints configure it identically.
-
-See [PacketRegistry.java](core/src/main/java/com/example/network/packets/PacketRegistry.java) for the implementation.
-
-### 4. Command Pattern
-
-[Learn more at refactoring.guru](https://refactoring.guru/design-patterns/command)
-
-**What it is:** A pattern where requests are encapsulated as objects, allowing you to parameterize, queue, and log them. Each request becomes a self-contained "command" object.
-**Why it's useful:** You can treat different types of requests uniformly, queue them, undo them, or log them.
-**How we use it:** Each packet class is essentially a command. The server receives packets and dispatches them to handler methods based on type.
+#### Common Mistake: Blocking the Network Thread
 
 ```java
-// Each packet type is a command object
+// ❌ BAD: Don't do heavy work in the callback!
+@Override
+public void received(Connection connection, Object packet) {
+    if (packet instanceof LargeDataPacket) {
+        // This blocks KryoNet's network thread!
+        saveToDatabase(packet);     // Slow I/O operation
+        processHugeList(packet);    // CPU-intensive work
+        Thread.sleep(1000);         // Never do this!
+    }
+}
+
+// ✅ GOOD: Store data and process elsewhere
+@Override
+public void received(Connection connection, Object packet) {
+    if (packet instanceof LargeDataPacket) {
+        // Quick: just store it in a thread-safe queue
+        pendingPackets.add(packet);
+        // Process later in your game loop (see Producer-Consumer pattern)
+    }
+}
+```
+
+---
+
+### 2. Command Pattern (Required)
+
+If you've used KryoNet, you've already used this pattern—you just might not have known the name.
+
+Think of a restaurant. When you order food, the waiter writes your order on a slip of paper. That slip is a **command object**—it encapsulates everything needed to fulfill your request (what dish, how cooked, any modifications). The kitchen doesn't need to talk to you directly; it just processes the command slip.
+
+In code terms:
+- **Command** — An object that encapsulates a request with all its data
+- **Invoker** — The thing that triggers the command (the network)
+- **Receiver** — The thing that executes the command (your handler method)
+
+#### Why KryoNet REQUIRES This Pattern
+
+KryoNet's `Listener.received()` method has this signature:
+
+```java
+public void received(Connection connection, Object object)
+//                                          ^^^^^^
+//                       This is just "Object" - could be ANYTHING!
+```
+
+The `object` parameter can be *any* class you've registered with Kryo. KryoNet doesn't know or care what type it is—that's your job to figure out. This design **forces** you to use the Command pattern:
+
+```java
+// ❌ Without Command pattern - this doesn't work!
+public void received(Connection connection, Object object) {
+    // What is "object"? Could be LoginRequest, ChatMessage, PlayerPosition...
+    // There's no way to know without checking!
+    
+    // This won't compile - Object has no "playerName" field
+    String name = object.playerName;
+}
+
+// ✅ With Command pattern - each packet is a self-contained command
+public void received(Connection connection, Object object) {
+    // Check the type and dispatch to the appropriate handler
+    if (object instanceof LoginRequest) {
+        LoginRequest cmd = (LoginRequest) object;
+        handleLogin(connection, cmd.playerName, cmd.clientVersion);
+    } 
+    else if (object instanceof PlayerPosition) {
+        PlayerPosition cmd = (PlayerPosition) object;
+        handlePosition(connection, cmd.playerId, cmd.x, cmd.y);
+    }
+    else if (object instanceof ChatMessage) {
+        ChatMessage cmd = (ChatMessage) object;
+        handleChat(connection, cmd.senderName, cmd.message);
+    }
+}
+```
+
+#### Creating Command Classes (Packets)
+
+Each packet class is a command object. Here's the anatomy:
+
+```java
+/**
+ * Command: Request to log in to the server
+ * 
+ * Sender:   Client
+ * Receiver: Server
+ * Protocol: TCP (must arrive reliably)
+ */
+public class LoginRequest {
+    // Data fields - everything needed to execute this command
+    public String playerName;      // Who is logging in?
+    public String clientVersion;   // What version are they running?
+    
+    // REQUIRED: No-argument constructor for Kryo deserialization
+    public LoginRequest() {}
+    
+    // Optional: Convenience constructor for sending
+    public LoginRequest(String playerName, String clientVersion) {
+        this.playerName = playerName;
+        this.clientVersion = clientVersion;
+    }
+    
+    // Optional: toString for debugging
+    @Override
+    public String toString() {
+        return "LoginRequest{name='" + playerName + "', version='" + clientVersion + "'}";
+    }
+}
+```
+
+**Why the empty constructor?** When bytes arrive over the network, Kryo needs to:
+1. Create an empty object: `new LoginRequest()` (needs no-arg constructor!)
+2. Set each field from the byte stream using reflection
+
+Without the empty constructor, Kryo throws `InstantiationException`.
+
+#### Complete Example: Multiple Command Types
+
+```java
+// --- Packet classes (each is a "command") ---
+
 public class LoginRequest {
     public String playerName;
-    public String clientVersion;
+    public LoginRequest() {}
+}
+
+public class LoginResponse {
+    public boolean success;
+    public int assignedPlayerId;   // -1 if failed
+    public String message;         // "Welcome!" or "Server full"
+    public LoginResponse() {}
+}
+
+public class PlayerPosition {
+    public int playerId;
+    public float x, y;
+    public long timestamp;
+    public PlayerPosition() {}
 }
 
 public class ChatMessage {
     public String senderName;
     public String message;
+    public long timestamp;
+    public ChatMessage() {}
 }
 
-// Server processes commands based on type
-@Override
-public void onReceived(PlayerConnection connection, Object packet) {
-    if (packet instanceof LoginRequest) {
-        handleLogin(connection, (LoginRequest) packet);
-    } else if (packet instanceof PlayerPosition) {
-        handlePosition(connection, (PlayerPosition) packet);
-    } else if (packet instanceof ChatMessage) {
-        handleChat(connection, (ChatMessage) packet);
+// --- Server-side handler ---
+
+public class GameServerListener extends Listener {
+    
+    @Override
+    public void received(Connection connection, Object object) {
+        // Dispatch based on command type
+        if (object instanceof LoginRequest) {
+            handleLogin(connection, (LoginRequest) object);
+        } 
+        else if (object instanceof PlayerPosition) {
+            handlePosition(connection, (PlayerPosition) object);
+        } 
+        else if (object instanceof ChatMessage) {
+            handleChat(connection, (ChatMessage) object);
+        }
+        // Add more handlers as you add more packet types
+    }
+    
+    private void handleLogin(Connection conn, LoginRequest cmd) {
+        System.out.println(cmd.playerName + " is logging in...");
+        
+        // Validate the command
+        if (cmd.playerName == null || cmd.playerName.isEmpty()) {
+            conn.sendTCP(new LoginResponse(false, -1, "Name required"));
+            return;
+        }
+        
+        // Execute the command
+        int playerId = conn.getID();
+        players.put(playerId, new Player(cmd.playerName));
+        
+        // Send response
+        conn.sendTCP(new LoginResponse(true, playerId, "Welcome!"));
+        
+        // Notify others
+        server.sendToAllExceptTCP(playerId, new PlayerJoined(playerId, cmd.playerName));
+    }
+    
+    private void handlePosition(Connection conn, PlayerPosition cmd) {
+        // Validate: Is this player allowed to send positions?
+        // Validate: Are coordinates within bounds?
+        // Execute: Update server state
+        // Relay: Send to other players
+    }
+    
+    private void handleChat(Connection conn, ChatMessage cmd) {
+        // Validate: Check for profanity, length limits, rate limiting
+        // Execute: Add timestamp
+        // Relay: Broadcast to all players
     }
 }
 ```
 
-This makes it easy to add new packet types: create the class, register it, add a handler.
+#### Benefits of Command Pattern with KryoNet
 
-#### Why Command Pattern is Necessary in KryoNet
+| Benefit | Explanation |
+|---------|-------------|
+| **Type safety** | `instanceof` checks are safer than manual type codes |
+| **Self-documenting** | Each packet class documents its fields |
+| **Easy to extend** | Add new packet = new class + register + handler |
+| **Loggable** | You can log packets: `System.out.println(packet)` |
+| **Queueable** | You can store packets in a list for later processing |
 
-KryoNet delivers all incoming data through a single callback: `listener.received(connection, Object)`. The `Object` parameter can be *any* registered class. Without the Command pattern, you'd need to:
+#### Common Mistake: Forgetting to Register
 
-1. **Manually parse bytes** — Determine what type of message arrived and decode it
-2. **Use a giant switch statement** — Check raw type codes and cast accordingly
-3. **Tightly couple sender and receiver** — Both sides would need to agree on byte layouts
+```java
+// You create a shiny new packet class...
+public class PowerUp {
+    public int type;
+    public float x, y;
+    public PowerUp() {}
+}
 
-The Command pattern solves this by making each packet a self-describing object:
-- **Type information is automatic** — `instanceof` checks replace manual type codes
-- **Data is already deserialized** — Kryo populates fields before your callback runs
-- **Adding new commands is trivial** — Create class → register → add handler
+// ❌ But forget to register it!
+public class PacketRegistry {
+    public static void register(Kryo kryo) {
+        kryo.register(LoginRequest.class);
+        kryo.register(PlayerPosition.class);
+        // Oops! PowerUp not registered!
+    }
+}
 
-This is why KryoNet + Command pattern work so well together: Kryo handles serialization, and the Command pattern provides a clean dispatch mechanism. The server doesn't care *how* packets arrive—it just receives command objects and routes them to handlers.
+// Result: KryoException when sending PowerUp
+// "Class is not registered: com.example.packets.PowerUp"
+```
 
-### 5. Producer-Consumer Pattern
+**Always add new packets to `PacketRegistry`!**
 
-*Note: Producer-Consumer is a concurrency pattern, not a Gang of Four pattern. See [Wikipedia](https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem) for background.*
+---
 
-**What it is:** A pattern where one or more threads (producers) generate data and place it in a shared buffer, while other threads (consumers) retrieve and process that data. The two sides operate independently.
-**Why it's useful:** Decouples data generation from data processing. Producers don't block waiting for consumers, and consumers don't block waiting for producers (beyond buffer access).
-**How we use it:** KryoNet's network thread is the producer—it receives packets and writes to shared collections. LibGDX's render thread is the consumer—it reads from those collections to draw frames.
+### 3. Registry Pattern (Required)
 
-| Thread | Role | Example |
-|--------|------|---------||
-| Network (KryoNet) | Producer | `remotePlayers.put(id, player)` when `PlayerPosition` arrives |
-| Render (LibGDX) | Consumer | `for (RemotePlayer p : remotePlayers.values()) draw(p)` |
+This is the pattern most likely to bite you if you ignore it.
 
-The "buffer" between them is a thread-safe collection (`ConcurrentHashMap`). This allows:
-- Network thread to update player positions at any time
-- Render thread to read positions at 60 FPS without blocking
-- No explicit locking in application code
+Imagine a wedding venue's seating chart. Instead of each guest wandering around looking for their seat, there's one master chart at the entrance. Everyone checks the chart, finds their table number, and goes directly there.
 
-See the [Thread Synchronization](#thread-synchronization) section for implementation details.
+The Registry pattern works the same way:
+- **Central location** — One place where related configurations are managed
+- **Consistent view** — Everyone uses the same source of truth
+- **Single point of change** — Need to add something? Update one place, not many.
+
+#### Why Kryo REQUIRES This Pattern
+
+Kryo uses **integer IDs** internally to identify classes. When you register a class, Kryo assigns it the next available ID:
+
+```java
+kryo.register(LoginRequest.class);   // Gets ID 0
+kryo.register(PlayerPosition.class); // Gets ID 1
+kryo.register(ChatMessage.class);    // Gets ID 2
+```
+
+When Kryo sends a `LoginRequest` over the network, it doesn't send the class name—it sends `0`. When the receiver gets `0`, it looks up which class has ID `0`.
+
+**Here's the critical problem:**
+
+```java
+// SERVER registers packets in this order:
+kryo.register(LoginRequest.class);    // ID 0
+kryo.register(LoginResponse.class);   // ID 1
+kryo.register(PlayerPosition.class);  // ID 2
+
+// CLIENT accidentally registers in different order (copy-paste bug, alphabetical ordering, etc.)
+kryo.register(LoginRequest.class);    // ID 0 ✓ (matches)
+kryo.register(PlayerPosition.class);  // ID 1 ✗ (server says LoginResponse is 1!)
+kryo.register(LoginResponse.class);   // ID 2 ✗ (server says PlayerPosition is 2!)
+
+// RESULT: Server sends LoginResponse (ID=1), client thinks it's PlayerPosition!
+// You get ClassCastException, corrupted data, or silent bugs.
+```
+
+**The fix: A single Registry class used by BOTH client and server.**
+
+#### Complete Registry Implementation
+
+```java
+// PacketRegistry.java - the ONLY place where packets are registered
+package com.example.network.packets;
+
+import com.esotericsoftware.kryo.Kryo;
+
+/**
+ * Central registry for all packet classes.
+ * 
+ * CRITICAL: This class MUST be used by both client and server!
+ * If client and server register classes in different orders,
+ * packets will be misinterpreted (class ID mismatch).
+ * 
+ * HOW TO ADD A NEW PACKET:
+ * 1. Create your packet class in this package
+ * 2. Add kryo.register(YourPacket.class) at THE END of this method
+ * 3. Never reorder existing registrations!
+ */
+public class PacketRegistry {
+    
+    public static void register(Kryo kryo) {
+        // Authentication
+        kryo.register(LoginRequest.class);
+        kryo.register(LoginResponse.class);
+        
+        // Player state
+        kryo.register(PlayerPosition.class);
+        kryo.register(PlayerJoined.class);
+        kryo.register(PlayerLeft.class);
+        
+        // Game events
+        kryo.register(ChatMessage.class);
+        kryo.register(PingRequest.class);
+        kryo.register(PingResponse.class);
+        
+        // Add new packets at the end!
+    }
+}
+```
+
+#### Using the Registry
+
+```java
+public class NetworkClient {
+    private final Client kryoClient;
+    
+    public NetworkClient() {
+        this.kryoClient = new Client(16384, 4096);
+        PacketRegistry.register(kryoClient.getKryo());  // Same as server
+        kryoClient.start();
+    }
+}
+
+public class NetworkServer {
+    private final Server kryoServer;
+    
+    public NetworkServer() {
+        this.kryoServer = new Server(16384, 4096);
+        PacketRegistry.register(kryoServer.getKryo());  // Same as client
+        kryoServer.start();
+    }
+}
+```
+
+Because both `NetworkClient` and `NetworkServer` call `PacketRegistry.register()`, they will always have identical class ID mappings.
+
+#### What About Just Using a Map/Dictionary?
+
+A common misconception: "Isn't this just a dictionary?"
+
+No. A dictionary **stores and retrieves** data. Our `PacketRegistry`:
+- **Configures** an external system (Kryo) 
+- **Doesn't store** any data itself
+- **Enforces order** (which a HashMap doesn't guarantee)
+
+```java
+// ❌ This is a Dictionary pattern - NOT what we're doing
+Map<String, Class<?>> packets = new HashMap<>();
+packets.put("login", LoginRequest.class);
+Class<?> cls = packets.get("login");  // Lookup by key
+
+// ✅ This is the Registry pattern - configuring Kryo
+public static void register(Kryo kryo) {
+    kryo.register(LoginRequest.class);  // No lookup, just configuration
+    // We're telling Kryo "this class exists and should have the next ID"
+}
+```
+
+#### Common Mistakes
+
+```java
+// ❌ MISTAKE 1: Registering packets in both client AND server code separately
+// File: DesktopLauncher.java
+kryo.register(LoginRequest.class);
+
+// File: ServerLauncher.java  
+kryo.register(LoginRequest.class);
+// These might get out of sync!
+
+// ❌ MISTAKE 2: Adding a packet and forgetting to register it
+public class DamagePacket {
+    public int damage;
+    public DamagePacket() {}
+}
+// Oops! Never added to PacketRegistry!
+// Result: KryoException("Class is not registered: DamagePacket")
+
+// ❌ MISTAKE 3: Inserting a new packet in the middle
+public static void register(Kryo kryo) {
+    kryo.register(LoginRequest.class);    // ID 0
+    kryo.register(NewPacket.class);       // ID 1 - WRONG! Breaks existing!
+    kryo.register(LoginResponse.class);   // ID 2 - Was 1, now different!
+}
+// ✅ CORRECT: Always add at the END
+```
+
+---
+
+### 4. Producer-Consumer Pattern (Required for Games)
+
+If your game freezes or shows corrupted data, this is probably why.
+
+Imagine a restaurant kitchen:
+- **Waiters (producers)** bring order slips and put them on a rack
+- **Chefs (consumers)** take slips from the rack and cook the orders
+- **The rack (buffer)** decouples waiters from chefs—they don't need to talk directly
+
+Neither blocks the other:
+- Waiters don't wait for chefs to finish cooking before taking new orders
+- Chefs cook at their own pace, grabbing orders when ready
+
+#### Why KryoNet Games REQUIRE This Pattern
+
+KryoNet has its own **network thread** that runs separately from your game's **render thread**:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    YOUR GAME APPLICATION                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   ┌──────────────────────┐        ┌──────────────────────┐         │
+│   │   NETWORK THREAD     │        │   RENDER THREAD      │         │
+│   │   (KryoNet)          │        │   (LibGDX/Game Loop) │         │
+│   ├──────────────────────┤        ├──────────────────────┤         │
+│   │ • Polls socket       │        │ • Runs at 60 FPS     │         │
+│   │ • Deserializes bytes │        │ • Processes input    │         │
+│   │ • Calls listeners    │        │ • Updates game logic │         │
+│   │ • Runs continuously  │        │ • Renders graphics   │         │
+│   └──────────┬───────────┘        └──────────┬───────────┘         │
+│              │                               │                      │
+│              │     ┌─────────────────────┐   │                      │
+│              └────▶│  SHARED BUFFER      │◀──┘                      │
+│                    │  (ConcurrentHashMap)│                          │
+│                    │                     │                          │
+│   WRITE ──────────▶│  playerId → {x, y} │────────────▶ READ        │
+│   (network thread) │  playerId → {x, y} │   (render thread)        │
+│                    └─────────────────────┘                          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+If you try to share data without synchronization:
+
+```java
+// ❌ WRONG: Regular HashMap is NOT thread-safe
+private Map<Integer, RemotePlayer> remotePlayers = new HashMap<>();
+
+// Network thread (KryoNet callback)
+@Override
+public void received(Connection conn, Object packet) {
+    if (packet instanceof PlayerPosition) {
+        PlayerPosition pos = (PlayerPosition) packet;
+        // Writing to HashMap from network thread
+        remotePlayers.put(pos.playerId, new RemotePlayer(pos.x, pos.y));
+    }
+}
+
+// Render thread (LibGDX)
+@Override
+public void render() {
+    // Reading from HashMap on render thread - RACE CONDITION!
+    for (RemotePlayer player : remotePlayers.values()) {
+        draw(player);  // May see partially updated data, or crash!
+    }
+}
+```
+
+#### Complete Producer-Consumer Implementation
+
+```java
+// The shared buffer: thread-safe collections
+public class GameClientScreen extends ApplicationAdapter {
+    
+    // Thread-safe - can be written by network thread, read by render thread
+    private final ConcurrentHashMap<Integer, RemotePlayer> remotePlayers 
+        = new ConcurrentHashMap<>();
+    private final CopyOnWriteArrayList<String> chatMessages 
+        = new CopyOnWriteArrayList<>();
+    
+    // Local state (only touched by render thread, no sync needed)
+    private float localX = 400, localY = 300;
+    private int localPlayerId = -1;
+}
+
+// The producer: network thread writes to the buffer
+public class GameNetworkListener extends Listener {
+    private final GameClientScreen screen;
+    
+    public GameNetworkListener(GameClientScreen screen) {
+        this.screen = screen;
+    }
+    
+    @Override
+    public void received(Connection connection, Object packet) {
+        // This runs on NETWORK thread - keep it fast!
+        if (packet instanceof PlayerPosition) {
+            PlayerPosition pos = (PlayerPosition) packet;
+            screen.remotePlayers.put(pos.playerId, 
+                new RemotePlayer(pos.playerId, pos.x, pos.y));
+        }
+        else if (packet instanceof ChatMessage) {
+            ChatMessage chat = (ChatMessage) packet;
+            screen.chatMessages.add(chat.senderName + ": " + chat.message);
+        }
+        else if (packet instanceof PlayerLeft) {
+            PlayerLeft left = (PlayerLeft) packet;
+            screen.remotePlayers.remove(left.playerId);
+        }
+    }
+}
+
+// The consumer: render thread reads from the buffer
+public class GameClientScreen extends ApplicationAdapter {
+    
+    @Override
+    public void render() {
+        // This runs on RENDER thread at 60 FPS
+        
+        // Draw remote players (red) - reading from the buffer
+        // ConcurrentHashMap's iterator is thread-safe ("weakly consistent")
+        shapeRenderer.setColor(Color.RED);
+        for (RemotePlayer player : remotePlayers.values()) {
+            shapeRenderer.circle(player.x, player.y, 20);
+        }
+        
+        shapeRenderer.end();
+        
+        // Draw chat messages - reading from thread-safe list
+        spriteBatch.begin();
+        int y = 100;
+        for (String message : chatMessages) {
+            font.draw(spriteBatch, message, 10, y);
+            y += 20;
+        }
+        spriteBatch.end();
+    }
+}
+```
+
+#### Why ConcurrentHashMap Works Here
+
+| Operation | Thread | What Happens |
+|-----------|--------|--------------|
+| `remotePlayers.put(id, player)` | Network | Thread-safe write; doesn't block render |
+| `remotePlayers.values()` | Render | Returns a "weakly consistent" view |
+| `for (player : remotePlayers.values())` | Render | Sees a consistent snapshot; won't crash |
+
+"Weakly consistent" means the iterator won't throw `ConcurrentModificationException` and will reflect *some* state of the map (perhaps not the absolute latest write, but a valid state).
+
+For a game, this is perfect—if the render thread misses one frame's worth of position updates, you won't even notice. The next frame will catch up.
+
+#### Why NOT Use `synchronized`?
+
+```java
+// ❌ SLOWER APPROACH: Explicit synchronization
+private Map<Integer, RemotePlayer> remotePlayers = new HashMap<>();
+
+// Network thread
+public void received(...) {
+    synchronized(remotePlayers) {         // Blocks if render is reading!
+        remotePlayers.put(id, player);
+    }
+}
+
+// Render thread
+public void render() {
+    synchronized(remotePlayers) {         // Blocks if network is writing!
+        for (RemotePlayer p : remotePlayers.values()) {
+            draw(p);
+        }
+    }
+}
+// Result: Threads block each other, causing lag spikes
+```
+
+With `ConcurrentHashMap`:
+- Writers don't block readers
+- Multiple writers can work simultaneously (on different keys)
+- No explicit `synchronized` blocks needed
+
+---
+
+### 5. Connector Pattern (Recommended)
+
+KryoNet gives you both TCP and UDP on the same connection. The Connector pattern helps you use them wisely.
+
+In software architecture, a **Connector** is an abstraction that handles communication between components. Instead of components talking directly to each other, they communicate through a connector that:
+
+- **Hides protocol details** — Components don't care if you're using TCP, UDP, HTTP, or carrier pigeons
+- **Encapsulates connection logic** — Retry logic, buffering, error handling
+- **Allows protocol switching** — Swap TCP for WebSockets without changing application code
+
+Think of it like a universal power adapter—you plug your device into the adapter, and it handles converting to the local socket type.
+
+#### Why KryoNet Benefits from Connectors
+
+KryoNet supports **both TCP and UDP** on the same connection. This is powerful but requires careful thought about when to use each:
+
+```java
+// Without Connector thinking - scattered protocol decisions
+public void sendPosition(float x, float y) {
+    PlayerPosition pos = new PlayerPosition(localPlayerId, x, y);
+    client.sendUDP(pos);  // Why UDP? It's buried in game code.
+}
+
+public void sendChat(String message) {
+    ChatMessage chat = new ChatMessage(playerName, message);
+    client.sendTCP(chat);  // Why TCP? Also buried in game code.
+}
+
+public void sendLogin(String name) {
+    LoginRequest login = new LoginRequest(name);
+    client.sendTCP(login);  // Protocol choice scattered everywhere!
+}
+```
+
+With the Connector pattern, protocol selection is centralized:
+
+```java
+public class NetworkClient {
+    private final Client kryoClient;
+    
+    /** Send via TCP - for things that MUST arrive (login, chat, scores) */
+    public void sendReliable(Object packet) {
+        kryoClient.sendTCP(packet);
+    }
+    
+    /** Send via UDP - for frequent updates where speed beats reliability */
+    public void sendFast(Object packet) {
+        kryoClient.sendUDP(packet);
+    }
+}
+```
+
+#### Complete Connector Implementation
+
+```java
+public class NetworkClient {
+    private final Client kryoClient;
+    
+    /** Send packet via TCP. Use for: login, chat, game events, scores. */
+    public void sendReliable(Object packet) {
+        if (!isConnected()) {
+            throw new IllegalStateException("Not connected to server");
+        }
+        kryoClient.sendTCP(packet);
+    }
+    
+    /** Send packet via UDP. Use for: positions, velocities, animations. */
+    public void sendFast(Object packet) {
+        if (!isConnected()) {
+            throw new IllegalStateException("Not connected to server");
+        }
+        kryoClient.sendUDP(packet);
+    }
+    
+    // High-level API hides protocol choice from game code
+    
+    public void login(String playerName) {
+        sendReliable(new LoginRequest(playerName));
+    }
+    
+    public void updatePosition(float x, float y) {
+        sendFast(new PlayerPosition(localPlayerId, x, y, System.currentTimeMillis()));
+    }
+    
+    public void sendChat(String message) {
+        sendReliable(new ChatMessage(playerName, message, System.currentTimeMillis()));
+    }
+}
+```
+
+#### When to Use Each Channel
+
+| Channel | Protocol | Use For | Why |
+|---------|----------|---------|-----|
+| **Reliable** | TCP | Login, logout, chat, scores, game over | Must arrive; order matters |
+| **Fast** | UDP | Positions, velocities, animations | Speed > reliability; old data is stale |
+
+```java
+// Game code uses semantic methods - doesn't care about TCP vs UDP
+networkClient.updatePosition(newX, newY);    // UDP internally
+networkClient.sendChat("Hello everyone!");   // TCP internally
+networkClient.login(playerName);             // TCP internally
+```
+
+#### Connector vs Facade: What's the Difference?
+
+These patterns work together but serve different purposes:
+
+| Aspect | Connector | Facade |
+|--------|-----------|--------|
+| **Focus** | Communication protocols | API simplification |
+| **Abstracts** | How data travels | Complex subsystem internals |
+| **Example** | `sendReliable()` vs `sendFast()` | `NetworkClient` wrapping KryoNet |
+
+Our `NetworkClient` is **both**:
+- **Facade**: Hides KryoNet's complexity (buffer sizes, threading, Kryo registration)
+- **Connector**: Abstracts protocol choice (TCP vs UDP)
+
+---
+
+### 6. Facade Pattern (Recommended)
+
+KryoNet's raw API works, but it's verbose. A facade makes your life easier.
+
+Imagine buying coffee at a café. You say "large latte please" and get a drink. But behind the counter:
+- Grind the beans
+- Dose espresso into portafilter
+- Tamp and lock into machine
+- Pull shot for 25 seconds
+- Steam milk to 65°C
+- Pour in specific pattern
+- Add lid if to-go
+
+The barista is a **facade**—a simplified interface to a complex process.
+
+In code:
+- **Facade** — A class that provides a simple API to a complex subsystem
+- **Subsystem** — Multiple classes/components that work together
+- **Client** — Code that uses the facade instead of the subsystem directly
+
+#### Why KryoNet Benefits from a Facade
+
+Using KryoNet directly requires many steps:
+
+```java
+// ❌ WITHOUT FACADE: Raw KryoNet usage (verbose!)
+Client client = new Client(16384, 4096);  // Magic numbers!
+
+// Register packets (required, easy to forget)
+Kryo kryo = client.getKryo();
+kryo.register(LoginRequest.class);
+kryo.register(LoginResponse.class);
+kryo.register(PlayerPosition.class);
+// ... don't forget any!
+
+// Start background thread (required before connect)
+client.start();
+
+// Connect with timeout
+try {
+    client.connect(5000, "192.168.1.100", 27960, 27961);
+} catch (IOException e) {
+    // Handle connection failure
+}
+
+// Add listener (must extend Listener class)
+client.addListener(new Listener() {
+    @Override
+    public void received(Connection connection, Object object) {
+        // Handle packets
+    }
+    @Override 
+    public void disconnected(Connection connection) {
+        // Handle disconnection  
+    }
+});
+
+// Track connection state yourself
+boolean isConnected = client.isConnected();
+```
+
+With a facade:
+
+```java
+// ✅ WITH FACADE: Clean and simple
+NetworkClient client = new NetworkClient();
+client.connect("192.168.1.100");
+client.addListener(myGameListener);
+client.sendReliable(new LoginRequest("PlayerName"));
+```
+
+#### Complete Facade Implementation
+
+```java
+package com.example.network;
+
+import com.esotericsoftware.kryonet.Client;
+import com.esotericsoftware.kryonet.Connection;
+import com.esotericsoftware.kryonet.Listener;
+import com.example.network.packets.PacketRegistry;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+/**
+ * Facade over KryoNet's Client class.
+ * 
+ * Simplifies network client usage by:
+ * - Handling buffer size configuration
+ * - Automating packet registration via PacketRegistry
+ * - Starting the network thread automatically
+ * - Providing a simpler listener interface
+ * - Managing connection state
+ */
+public class NetworkClient {
+    
+    private final Client kryoClient;
+    private final List<NetworkListener> listeners = new CopyOnWriteArrayList<>();
+    
+    public NetworkClient() {
+        // Create with reasonable buffer sizes
+        this.kryoClient = new Client(
+            NetworkConfig.WRITE_BUFFER_SIZE,
+            NetworkConfig.OBJECT_BUFFER_SIZE
+        );
+        
+        // Register all packet types
+        PacketRegistry.register(kryoClient.getKryo());
+        
+        // Bridge KryoNet's Listener to our simpler NetworkListener
+        kryoClient.addListener(new Listener() {
+            @Override
+            public void connected(Connection connection) {
+                for (NetworkListener listener : listeners) {
+                    listener.onConnected();
+                }
+            }
+            
+            @Override
+            public void disconnected(Connection connection) {
+                for (NetworkListener listener : listeners) {
+                    listener.onDisconnected();
+                }
+            }
+            
+            @Override
+            public void received(Connection connection, Object object) {
+                for (NetworkListener listener : listeners) {
+                    listener.onReceived(object);
+                }
+            }
+        });
+        
+        kryoClient.start();
+    }
+    
+    /** Connect using just the hostname. Uses defaults for ports and timeout. */
+    public boolean connect(String host) {
+        try {
+            kryoClient.connect(
+                NetworkConfig.CONNECTION_TIMEOUT,
+                host,
+                NetworkConfig.TCP_PORT,
+                NetworkConfig.UDP_PORT
+            );
+            return true;
+        } catch (IOException e) {
+            System.err.println("Connection failed: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    public void addListener(NetworkListener listener) {
+        listeners.add(listener);
+    }
+    
+    public void removeListener(NetworkListener listener) {
+        listeners.remove(listener);
+    }
+    
+    public void sendReliable(Object packet) {
+        kryoClient.sendTCP(packet);
+    }
+    
+    public void sendFast(Object packet) {
+        kryoClient.sendUDP(packet);
+    }
+    
+    public boolean isConnected() {
+        return kryoClient.isConnected();
+    }
+    
+    public void disconnect() {
+        kryoClient.close();
+    }
+}
+```
+
+#### The Simplified Listener Interface
+
+```java
+/**
+ * Simplified listener interface for network events.
+ * 
+ * Unlike KryoNet's Listener class (which has many methods and requires
+ * Connection handling), this interface focuses on what game code cares about.
+ */
+public interface NetworkListener {
+    void onConnected();
+    void onDisconnected();
+    void onReceived(Object packet);
+}
+```
+
+#### Benefits of the Facade
+
+| Without Facade | With Facade |
+|----------------|-------------|
+| Know buffer sizes | Just `new NetworkClient()` |
+| Register each packet | Automatic via PacketRegistry |
+| Call `start()` before `connect()` | Handled in constructor |
+| Handle IOException | Returns boolean |
+| Extend `Listener` class | Implement simple interface |
+| Track connection state | `isConnected()` method |
+
+**The facade doesn't add functionality—it makes existing functionality easier to use.**
+
+---
+
+### Pattern Summary: How They Work Together
+
+Here's the complete flow of patterns when a player sends their position:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  CLIENT SENDS POSITION                                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. FACADE: networkClient.updatePosition(x, y)                              │
+│     └── Simplifies: No buffers, ports, or raw KryoNet calls                 │
+│                                                                             │
+│  2. CONNECTOR: sendFast() → UDP (not TCP)                                   │
+│     └── Abstracts: Game code doesn't decide protocol                        │
+│                                                                             │
+│  3. COMMAND: new PlayerPosition(id, x, y) packet created                    │
+│     └── Encapsulates: All data needed for this request                      │
+│                                                                             │
+│  4. REGISTRY: Kryo looks up PlayerPosition → ID 2                           │
+│     └── Ensures: Same ID on client and server                               │
+│                                                                             │
+│  ════════════════════ NETWORK (UDP) ════════════════════                    │
+│                                                                             │
+│  5. REGISTRY: Server Kryo sees ID 2 → PlayerPosition.class                  │
+│     └── Deserializes: Bytes back to object                                  │
+│                                                                             │
+│  6. OBSERVER: listener.received(conn, playerPosObject)                      │
+│     └── Notifies: All registered listeners                                  │
+│                                                                             │
+│  7. COMMAND: if (object instanceof PlayerPosition) handlePosition()         │
+│     └── Dispatches: To appropriate handler                                  │
+│                                                                             │
+│  8. PRODUCER-CONSUMER: remotePlayers.put(id, pos) // network thread         │
+│                        render() reads remotePlayers  // render thread       │
+│     └── Decouples: Network from rendering                                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Quick Reference: Which Pattern to Use When
+
+| Situation | Pattern | Example |
+|-----------|---------|---------|
+| Receiving network events | Observer | `client.addListener(myListener)` |
+| Sending typed messages | Command | `new ChatMessage("Hi!")` packet |
+| Registering packet classes | Registry | `PacketRegistry.register(kryo)` |
+| Network thread → game thread | Producer-Consumer | `ConcurrentHashMap` |
+| TCP vs UDP selection | Connector | `sendReliable()` vs `sendFast()` |
+| Simplifying KryoNet API | Facade | `NetworkClient` wrapper |
 
 ---
 
@@ -606,7 +1687,7 @@ This means your listener code runs concurrently with your game's render loop. If
 
 ### Thread-Safe Collections (Producer-Consumer Implementation)
 
-This section implements the [Producer-Consumer Pattern](#5-producer-consumer-pattern) described above. Without thread-safe collections, the render thread might read a partially-written object or miss updates entirely.
+This section implements the [Producer-Consumer Pattern](#4-producer-consumer-pattern-required-for-games) described above. Without thread-safe collections, the render thread might read a partially-written object or miss updates entirely.
 
 ### Thread-Safe Collections Used
 
@@ -699,12 +1780,12 @@ This decouples network I/O from rendering—packets are processed as fast as the
 
 This means another server instance is already running on the same port. Solutions:
 
-1. **Check your terminals** - Look for existing "Run: ServerLauncher" terminals at the bottom of VS Code and close them
+1. **Check your terminals.** Look for existing "Run: ServerLauncher" terminals at the bottom of VS Code and close them.
 2. **Kill Java processes:**
    ```powershell
    taskkill /F /IM java.exe
    ```
-3. **Restart VS Code** - This closes all terminals and their processes
+3. **Restart VS Code.** This closes all terminals and their processes.
 
 ### VS Code doesn't show run configurations
 
@@ -761,7 +1842,17 @@ if (packet instanceof PlayerDamage) {
 
 ## Resources
 
-- [KryoNet GitHub](https://github.com/EsotericSoftware/kryonet) - Source code and examples
-- [Kryo Serialization](https://github.com/EsotericSoftware/kryo) - How the serializer works
-- [LibGDX Wiki](https://libgdx.com/wiki/) - LibGDX documentation
-- [Game Networking Articles](https://gafferongames.com/) - In-depth networking concepts
+### Libraries Used
+- [KryoNet GitHub](https://github.com/EsotericSoftware/kryonet) — Source code and examples
+- [Kryo Serialization](https://github.com/EsotericSoftware/kryo) — How the serializer works
+- [LibGDX Wiki](https://libgdx.com/wiki/) — LibGDX documentation
+
+### Learning
+- [Refactoring Guru: Design Patterns](https://refactoring.guru/design-patterns) — Comprehensive pattern catalog with examples
+- [Game Networking Articles](https://gafferongames.com/) — In depth networking concepts by Glenn Fiedler
+- [Java Concurrency in Practice](https://jcip.net/) — The definitive guide to thread safety (book)
+
+### Reference
+- [ConcurrentHashMap Javadoc](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ConcurrentHashMap.html) — Thread safe map used in this project
+- [Gradle User Guide](https://docs.gradle.org/current/userguide/userguide.html) — Build tool documentation
+- [Java NIO Tutorial](https://docs.oracle.com/javase/tutorial/essential/io/fileio.html) — Non blocking I/O that KryoNet uses
