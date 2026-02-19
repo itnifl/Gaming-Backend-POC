@@ -51,7 +51,7 @@ Install these extensions via the Extensions panel (`Ctrl+Shift+X`):
 
 ## Quick Start with VS Code
 
-**[Watch the video walkthrough](demo-media/howtostart.mp4)** if you prefer a visual guide.
+<video src="https://raw.githubusercontent.com/itnifl/Gaming-Backend-POC/master/demo-media/howtostart.mp4" controls width="100%"></video>
 
 ### Starting the Server (VS Code Debug)
 
