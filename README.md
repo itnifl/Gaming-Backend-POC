@@ -2,6 +2,40 @@
 
 A practical multiplayer game networking example built for TDT4240 Software Architecture. <br/> This project demonstrates how to implement real-time client-server communication using KryoNet with LibGDX.
 
+## Table of Contents
+
+- [What This Project Does](#what-this-project-does)
+- [Prerequisites](#prerequisites)
+- [Quick Start with VS Code](#quick-start-with-vs-code)
+- [Project Structure](#project-structure)
+- [Understanding the Networking](#understanding-the-networking)
+  - [Why KryoNet?](#why-kryonet)
+  - [About KryoNet's Java Version](#about-kryonets-java-version)
+  - [KryoNet Basics](#kryonet-basics)
+  - [Connection Objects and Broadcasting](#connection-objects-and-broadcasting)
+  - [How Network Communication Works](#how-network-communication-works)
+  - [The Packet System](#the-packet-system)
+  - [TCP vs UDP: When to Use Each](#tcp-vs-udp-when-to-use-each)
+- [Architecture: Layered Design](#architecture-layered-design)
+  - [What About MVC?](#what-about-mvc)
+  - [Other Architectural Patterns to Consider](#other-architectural-patterns-to-consider)
+- [Programming Patterns Inherent to KryoNet](#programming-patterns-inherent-to-kryonet)
+  - [1. Observer Pattern (Required)](#1-observer-pattern-required)
+  - [2. Command Pattern (Required)](#2-command-pattern-required)
+  - [3. Registry Pattern (Required)](#3-registry-pattern-required)
+  - [4. Producer-Consumer Pattern (Required for Games)](#4-producer-consumer-pattern-required-for-games)
+  - [5. Connector Pattern (Recommended)](#5-connector-pattern-recommended)
+  - [6. Facade Pattern (Recommended)](#6-facade-pattern-recommended)
+- [Chat System](#chat-system)
+- [Movement System](#movement-system)
+- [Thread Synchronization](#thread-synchronization)
+- [Framework Comparison for Game Server Setup](#framework-comparison-for-game-server-setup)
+- [Common Issues](#common-issues)
+- [Extending This Project](#extending-this-project)
+- [Resources](#resources)
+
+---
+
 ## What This Project Does
 
 This is a simple multiplayer game where players can:
