@@ -20,16 +20,16 @@ Before running this project, ensure you have:
 
 ### Java Development Kit (JDK)
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| **JDK** | 11 or newer | JDK 17 or 21 recommended for long-term support |
+**Required:** JDK 11 or newer (JDK 17 or 21 recommended for long-term support).
 
 Verify your installation:
 ```powershell
 java -version
 ```
 
-If not installed, download from [Adoptium](https://adoptium.net/) (free, community-supported OpenJDK builds).
+**Suggested (if not installed):** Download from [Adoptium](https://adoptium.net/).
+
+Java is a specification, not a single download—multiple vendors provide JDK implementations (Oracle JDK, Amazon Corretto, Azul Zulu, etc.). Any of them work. Adoptium is suggested because it's vendor-neutral, has no licensing restrictions, and provides straightforward installers for all platforms.
 
 ### VS Code Extensions
 
