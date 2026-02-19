@@ -51,7 +51,11 @@ Install these extensions via the Extensions panel (`Ctrl+Shift+X`):
 
 ## Quick Start with VS Code
 
+For visual walkthrough:
+
 <video src="https://raw.githubusercontent.com/itnifl/Gaming-Backend-POC/master/demo-media/howtostart.mp4" controls width="100%"></video>
+
+*Video not loading? [Click here to watch the walkthrough](https://raw.githubusercontent.com/itnifl/Gaming-Backend-POC/master/demo-media/howtostart.mp4) (GitHub doesn't render embedded videos in browser).*
 
 ### Starting the Server (VS Code Debug)
 
