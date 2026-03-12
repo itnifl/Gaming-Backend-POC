@@ -85,6 +85,8 @@ Install these extensions via the Extensions panel (`Ctrl+Shift+X`):
 
 ## Quick Start with VS Code
 
+NB! Build the code first!
+
 For visual walkthrough:
 
 <video src="https://raw.githubusercontent.com/itnifl/Gaming-Backend-POC/master/demo-media/howtostart.mp4" controls width="100%"></video>
