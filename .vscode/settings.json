@@ -1,0 +1,11 @@
+{
+    "java.project.sourcePaths": [
+        "core/src/main/java",
+        "server/src/main/java",
+        "desktop/src/main/java"
+    ],
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.import.gradle.enabled": true,
+    "java.import.gradle.wrapper.enabled": true
+}

@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "type": "java",
+            "name": "Run Server",
+            "request": "launch",
+            "mainClass": "com.example.server.ServerLauncher",
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "java",
+            "name": "Run Desktop Client",
+            "request": "launch",
+            "mainClass": "com.example.desktop.DesktopLauncher",
+            "args": "--name Player1"
+        },
+        {
+            "type": "java",
+            "name": "Run Desktop Client 2",
+            "request": "launch",
+            "mainClass": "com.example.desktop.DesktopLauncher",
+            "args": "--name Player2"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Server + Client",
+            "configurations": ["Run Server", "Run Desktop Client"],
+            "stopAll": true
+        }
+    ]
+}
