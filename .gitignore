@@ -25,6 +25,7 @@ android/libs/
 *.tmp
 README.pdf
 README.pdf
+*.class
 
 
 evaluation-docs/
